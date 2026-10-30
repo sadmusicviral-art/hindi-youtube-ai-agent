@@ -8,7 +8,6 @@ on:
 jobs:
   start-agent:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -18,19 +17,27 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Dependencies
+      - name: Install FFmpeg and Hindi fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core
+
+      - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install Pillow gTTS
 
-      - name: Generate Hindi Video Script
+      - name: Generate Story, Hindi Voice and MP4 Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python agent.py
 
-      - name: Save Generated Script
+      - name: Save Generated Files
         uses: actions/upload-artifact@v4
         with:
-          name: hindi-video-script
-          path: video_script.txt
-          
+          name: golu-sonu-cartoon-video
+          path: |
+            video_script.txt
+            narration.mp3
+            golu_sonu_cartoon.mp4
