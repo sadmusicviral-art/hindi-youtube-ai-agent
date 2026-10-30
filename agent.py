@@ -49,7 +49,7 @@ def generate_video_script():
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=180) as response:
+        with urllib.request.urlopen(request, timeout=90) as response:
             result = json.loads(response.read().decode("utf-8"))
 
         candidates = result.get("candidates", [])
