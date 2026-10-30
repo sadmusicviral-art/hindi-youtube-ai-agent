@@ -179,13 +179,12 @@ def create_character_narration(story):
         gTTS(text=text, lang="hi", slow=False).save(raw_file)
         pitch = {"golu": 0.90, "sonu": 1.12, "narrator": 1.0}[speaker]
         if pitch == 1.0:
-            subprocess.run(["ffmpeg", "-y", "-i", raw_file, "-c:a", "libmp3lame", "-q:a", "4", out_file],
-                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            audio_filter = "atempo=0.90"
         else:
-            audio_filter = f"asetrate=44100*{pitch},aresample=44100,atempo={1.0/pitch:.6f}"
-            subprocess.run(["ffmpeg", "-y", "-i", raw_file, "-af", audio_filter,
-                            "-c:a", "libmp3lame", "-q:a", "4", out_file],
-                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            audio_filter = f"asetrate=44100*{pitch},aresample=44100,atempo={1.0/pitch:.6f},atempo=0.90"
+        subprocess.run(["ffmpeg", "-y", "-i", raw_file, "-af", audio_filter,
+                        "-c:a", "libmp3lame", "-q:a", "4", out_file],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         audio_files.append(out_file)
     if not audio_files:
         raise RuntimeError("No spoken dialogue found for narration.")
