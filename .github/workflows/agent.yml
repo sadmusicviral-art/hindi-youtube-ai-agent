@@ -18,10 +18,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Check Agent
+      - name: Install Dependencies
         run: |
-          echo "Hindi YouTube AI Agent Started"
-          echo "Automation Runner Ready"
-          echo "Next step: Video Creation Engine"
+          python -m pip install --upgrade pip
 
-          
+      - name: Generate Hindi Video Script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python agent.py
+
+      - name: Save Generated Script
+        uses: actions/upload-artifact@v4
+        with:
+          name: hindi-video-script
+          path: video_script.txt
