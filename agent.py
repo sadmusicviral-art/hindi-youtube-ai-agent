@@ -5,8 +5,8 @@ import urllib.request
 import urllib.error
 
 API_KEY = os.getenv("GEMINI_API_KEY")
-MODEL = "gemini-3.8-flash"
-MAX_ATTEMPTS = 3
+MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+MAX_ATTEMPTS_PER_MODEL = 2
 TIMEOUT_SECONDS = 120
 
 
@@ -30,11 +30,6 @@ def generate_video_script():
 कहानी ओरिजिनल हो। जवाब बहुत लंबा न हो ताकि जल्दी जनरेट हो सके।
 """
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        + "models/" + MODEL + ":generateContent?key=" + API_KEY
-    )
-
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -43,63 +38,70 @@ def generate_video_script():
         }
     }
 
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(data, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
-
     last_error = None
-    for attempt in range(1, MAX_ATTEMPTS + 1):
-        try:
-            print(f"Gemini request attempt {attempt}/{MAX_ATTEMPTS}...")
-            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-                result = json.loads(response.read().decode("utf-8"))
 
-            candidates = result.get("candidates", [])
-            if not candidates:
-                raise RuntimeError(
-                    "Gemini returned no candidates: "
-                    + json.dumps(result, ensure_ascii=False)[:1500]
-                )
+    for model in MODELS:
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            + model + ":generateContent?key=" + API_KEY
+        )
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(data, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
 
-            parts = candidates[0].get("content", {}).get("parts", [])
-            texts = [part["text"] for part in parts if "text" in part]
-            if not texts:
-                raise RuntimeError("Gemini response did not contain text.")
+        for attempt in range(1, MAX_ATTEMPTS_PER_MODEL + 1):
+            try:
+                print(f"Trying {model}, attempt {attempt}/{MAX_ATTEMPTS_PER_MODEL}...")
+                with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+                    result = json.loads(response.read().decode("utf-8"))
 
-            script = "\n".join(texts).strip()
-            if not script:
-                raise RuntimeError("Gemini returned an empty script.")
+                candidates = result.get("candidates", [])
+                if not candidates:
+                    raise RuntimeError(
+                        f"{model} returned no candidates: "
+                        + json.dumps(result, ensure_ascii=False)[:1500]
+                    )
 
-            with open("video_script.txt", "w", encoding="utf-8") as file:
-                file.write(script + "\n")
+                parts = candidates[0].get("content", {}).get("parts", [])
+                texts = [part["text"] for part in parts if "text" in part]
+                if not texts:
+                    raise RuntimeError(f"{model} response did not contain text.")
 
-            print("SUCCESS: Golu-Sonu story saved to video_script.txt")
-            return
+                script = "\n".join(texts).strip()
+                if not script:
+                    raise RuntimeError(f"{model} returned an empty script.")
 
-        except urllib.error.HTTPError as error:
-            details = error.read().decode("utf-8", errors="replace")
-            # Retry temporary server/rate-limit errors; stop for invalid key/model/request.
-            if error.code not in (429, 500, 502, 503, 504):
+                with open("video_script.txt", "w", encoding="utf-8") as file:
+                    file.write(script + "\n")
+
+                print(f"SUCCESS: Story generated with {model} and saved to video_script.txt")
+                return
+
+            except urllib.error.HTTPError as error:
+                details = error.read().decode("utf-8", errors="replace")
+                last_error = RuntimeError(f"{model} HTTP {error.code}: {details[:1000]}")
+                print(f"{model} API error: HTTP {error.code}")
+
+                # Try the backup model for unavailable/busy service or quota errors.
+                if error.code in (429, 500, 502, 503, 504):
+                    break
                 raise RuntimeError(
                     f"Gemini API HTTP {error.code}: {details[:1500]}"
                 ) from error
-            last_error = RuntimeError(f"Gemini API HTTP {error.code}: {details[:1000]}")
-            print(f"Temporary Gemini API error: HTTP {error.code}")
 
-        except (TimeoutError, urllib.error.URLError) as error:
-            last_error = error
-            print(f"Temporary network/timeout error: {error}")
+            except (TimeoutError, urllib.error.URLError) as error:
+                last_error = error
+                print(f"{model} network/timeout error: {error}")
+                break
 
-        if attempt < MAX_ATTEMPTS:
-            wait_seconds = 10 * attempt
-            print(f"Retrying in {wait_seconds} seconds...")
-            time.sleep(wait_seconds)
+            if attempt < MAX_ATTEMPTS_PER_MODEL:
+                time.sleep(8 * attempt)
 
     raise RuntimeError(
-        f"Gemini failed after {MAX_ATTEMPTS} attempts. Last error: {last_error}"
+        "All free Gemini models failed. Last error: " + str(last_error)
     )
 
 
