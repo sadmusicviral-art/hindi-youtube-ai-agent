@@ -51,7 +51,7 @@ def generate_video_script():
     with urllib.request.urlopen(request, timeout=180) as response:
         result = json.loads(response.read().decode("utf-8"))
 
-    candidates = result.get(""candidates"", [])
+    candidates = result.get("candidates", [])
 
 if not candidates:
     raise RuntimeError(
