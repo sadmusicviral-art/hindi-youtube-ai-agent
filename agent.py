@@ -151,14 +151,60 @@ def make_scene_card(reference, scene, index, total):
     return output
 
 
+def create_character_narration(story):
+    """Create separate character-style voices using free Hindi TTS plus pitch shaping."""
+    audio_files = []
+    lines = [line.strip() for line in story.splitlines() if line.strip()]
+    print("Creating separate Hindi voices for Golu and Sonu...")
+    for line_number, line in enumerate(lines, start=1):
+        clean = re.sub(r"[*#_`]", "", line).strip()
+        if re.match(r"^सीन\s*[0-9०-९]+\s*$", clean, re.IGNORECASE):
+            continue
+        if re.match(r"^(image\s*prompt|इमेज\s*प्रॉम्प्ट)\s*:", clean, re.IGNORECASE):
+            continue
+        speaker = "narrator"
+        text = clean
+        match = re.match(r"^(गोलू|सोनू|नैरेटर|Narrator)\s*[:：-]\s*(.+)$", clean, re.IGNORECASE)
+        if match:
+            name = match.group(1).lower()
+            text = match.group(2).strip()
+            if name == "गोलू":
+                speaker = "golu"
+            elif name == "सोनू":
+                speaker = "sonu"
+        if not text:
+            continue
+        raw_file = f"voice_raw_{line_number:03d}.mp3"
+        out_file = f"voice_{line_number:03d}.mp3"
+        gTTS(text=text, lang="hi", slow=False).save(raw_file)
+        pitch = {"golu": 0.90, "sonu": 1.12, "narrator": 1.0}[speaker]
+        if pitch == 1.0:
+            subprocess.run(["ffmpeg", "-y", "-i", raw_file, "-c:a", "libmp3lame", "-q:a", "4", out_file],
+                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        else:
+            audio_filter = f"asetrate=44100*{pitch},aresample=44100,atempo={1.0/pitch:.6f}"
+            subprocess.run(["ffmpeg", "-y", "-i", raw_file, "-af", audio_filter,
+                            "-c:a", "libmp3lame", "-q:a", "4", out_file],
+                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        audio_files.append(out_file)
+    if not audio_files:
+        raise RuntimeError("No spoken dialogue found for narration.")
+    with open("audio_clips.txt", "w", encoding="utf-8", newline="\n") as file:
+        for audio_file in audio_files:
+            file.write(f"file '{audio_file}'\n")
+    subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "audio_clips.txt",
+                    "-c:a", "libmp3lame", "-q:a", "4", "narration.mp3"],
+                   check=True)
+    print(f"SUCCESS: Created {len(audio_files)} voice segments.")
+
+
 def build_video(story):
     if not os.path.exists(REFERENCE_IMAGE):
         raise FileNotFoundError(f"Character reference image not found: {REFERENCE_IMAGE}")
     speech = spoken_text(story)
     if len(speech) < 40:
         raise RuntimeError("Story text is too short to create narration.")
-    print("Creating Hindi voice narration...")
-    gTTS(text=speech, lang="hi", slow=False).save("narration.mp3")
+    create_character_narration(story)
     scenes = split_scenes(story)
     images = [make_scene_card(REFERENCE_IMAGE, scene, i + 1, len(scenes)) for i, scene in enumerate(scenes)]
     probe = subprocess.check_output([
