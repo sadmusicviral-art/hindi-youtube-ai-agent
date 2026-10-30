@@ -237,10 +237,22 @@ def build_video(story):
         for clip_name in clip_names:
             file.write(f"file '{clip_name}'\n")
 
-    print("Joining full-length scenes with Hindi narration...")
+    print("Creating a soft original comic background music bed...")
+    music_source = (
+        "aevalsrc=0.10*sin(2*PI*261.63*t)+0.07*sin(2*PI*329.63*t)+"
+        "0.06*sin(2*PI*392.00*t):s=44100:d=" + f"{total_duration:.3f}"
+    )
+    subprocess.run([
+        "ffmpeg", "-y", "-f", "lavfi", "-i", music_source, "-c:a", "pcm_s16le",
+        "background_music.wav"
+    ], check=True)
+
+    print("Mixing character voices with quiet background music...")
     subprocess.run([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "clips.txt",
-        "-i", "narration.mp3", "-map", "0:v:0", "-map", "1:a:0",
+        "-i", "narration.mp3", "-i", "background_music.wav",
+        "-filter_complex", "[2:a]volume=0.12[music];[1:a][music]amix=inputs=2:duration=first:dropout_transition=2,alimiter=limit=0.95[audio]",
+        "-map", "0:v:0", "-map", "[audio]",
         "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
         "-shortest", "-movflags", "+faststart", "golu_sonu_cartoon.mp4"
     ], check=True)
