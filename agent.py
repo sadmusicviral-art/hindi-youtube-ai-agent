@@ -48,7 +48,7 @@ def generate_video_script():
         method="POST"
     )
 
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with urllib.request.urlopen(request, timeout=180) as response:
         result = json.loads(response.read().decode("utf-8"))
 
     script = result["candidates"][0]["content"]["parts"][0]["text"]
