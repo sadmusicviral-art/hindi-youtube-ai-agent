@@ -85,7 +85,7 @@ def get_font(size):
 
 
 def split_scenes(story):
-    chunks = re.split(r"(?=सीन\\s*[0-9०-९]+)", story, flags=re.IGNORECASE)
+    chunks = re.split(r"(?=सीन\s*[0-9०-९]+)", story, flags=re.IGNORECASE)
     scenes = [chunk.strip() for chunk in chunks if chunk.strip()]
     return scenes[:6] if scenes else [story.strip()]
 
@@ -96,13 +96,13 @@ def spoken_text(story):
         value = line.strip()
         if not value:
             continue
-        if re.match(r"^(image\\s*prompt|इमेज\\s*प्रॉम्प्ट)\\s*:", value, re.IGNORECASE):
+        if re.match(r"^(image\s*prompt|इमेज\s*प्रॉम्प्ट)\s*:", value, re.IGNORECASE):
             continue
-        if re.search(r"\\b(3d cartoon|cinematic|high quality|character design|render)\\b", value, re.IGNORECASE):
+        if re.search(r"\b(3d cartoon|cinematic|high quality|character design|render)\b", value, re.IGNORECASE):
             continue
-        value = re.sub(r"[*#_\\x60]", "", value)
+        value = re.sub(r"[*#_\x60]", "", value)
         lines.append(value)
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def wrap_text(draw, text, font, max_width):
@@ -136,9 +136,9 @@ def make_scene_card(reference, scene, index, total):
     title_font = get_font(48)
     small_font = get_font(30)
     draw.text((75, 65), f"GOLU & SONU  |  SCENE {index}/{total}", font=title_font, fill="white", stroke_width=2, stroke_fill="black")
-    clean = re.sub(r"(?i)image\\s*prompt\\s*:[\\s\\S]*", "", scene)
-    clean = re.sub(r"इमेज\\s*प्रॉम्प्ट\\s*:[\\s\\S]*", "", clean).strip()
-    clean = re.sub(r"[*#_\\x60]", "", clean)
+    clean = re.sub(r"(?i)image\s*prompt\s*:[\s\S]*", "", scene)
+    clean = re.sub(r"इमेज\s*प्रॉम्प्ट\s*:[\s\S]*", "", clean).strip()
+    clean = re.sub(r"[*#_\x60]", "", clean)
     rows = wrap_text(draw, clean, small_font, 1080)[:5]
     panel_top = 480
     draw.rounded_rectangle((60, panel_top, 1220, 650), radius=18, fill=(0, 0, 0, 190))
@@ -170,9 +170,9 @@ def build_video(story):
     durations = [total_duration * weight / sum(weights) for weight in weights]
     with open("scenes.txt", "w", encoding="utf-8") as file:
         for image, duration in zip(images, durations):
-            file.write(f"file '{image}'\\n")
-            file.write(f"duration {duration:.3f}\\n")
-        file.write(f"file '{images[-1]}'\\n")
+            file.write(f"file '{image}'\n")
+            file.write(f"duration {duration:.3f}\n")
+        file.write(f"file '{images[-1]}'\n")
     print("Assembling MP4 with FFmpeg...")
     subprocess.run([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "scenes.txt",
