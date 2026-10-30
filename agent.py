@@ -51,7 +51,29 @@ def generate_video_script():
     with urllib.request.urlopen(request, timeout=180) as response:
         result = json.loads(response.read().decode("utf-8"))
 
-    script = result["candidates"][0]["content"]["parts"][0]["text"]
+    candidates = result.get(""candidates"", [])
+
+if not candidates:
+    raise RuntimeError(
+        "Gemini ne script nahi di: " +
+        json.dumps(result, ensure_ascii=False)[:2000]
+    )
+
+parts = candidates[0].get("content", {}).get("parts", [])
+
+texts = [
+    part["text"]
+    for part in parts
+    if "text" in part
+]
+
+if not texts:
+    raise RuntimeError(
+        "Gemini response mein text nahi mila: " +
+        json.dumps(result, ensure_ascii=False)[:2000]
+    )
+
+script = "\n".join(texts)
 
     with open("video_script.txt", "w", encoding="utf-8") as file:
         file.write(script)
