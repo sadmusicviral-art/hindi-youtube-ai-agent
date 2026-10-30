@@ -2,6 +2,9 @@ import os
 import json
 import re
 import time
+import math
+import wave
+import struct
 import subprocess
 import urllib.request
 import urllib.error
@@ -197,6 +200,31 @@ def create_character_narration(story):
     print(f"SUCCESS: Created {len(audio_files)} voice segments.")
 
 
+def create_comedy_sfx(durations, total_duration):
+    """Create an original cartoon boing track without external audio files."""
+    sample_rate = 44100
+    total_samples = int(total_duration * sample_rate)
+    samples = [0.0] * total_samples
+    elapsed = 0.0
+    for duration in durations:
+        start = int((elapsed + duration * 0.62) * sample_rate)
+        length = 0.32
+        count = min(int(length * sample_rate), total_samples - start)
+        for n in range(max(0, count)):
+            t = n / sample_rate
+            frequency = 620 - 390 * (t / length)
+            envelope = math.exp(-7.0 * t / length) * min(1.0, t * 45)
+            samples[start + n] += 0.20 * envelope * math.sin(2 * math.pi * frequency * t)
+        elapsed += duration
+    with wave.open("comedy_sfx.wav", "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(sample_rate)
+        frames = bytearray()
+        for value in samples:
+            value = max(-0.95, min(0.95, value))
+            frames.extend(struct.pack("<h", int(value * 32767)))
+        audio.writeframes(frames)
 def build_video(story):
     if not os.path.exists(REFERENCE_IMAGE):
         raise FileNotFoundError(f"Character reference image not found: {REFERENCE_IMAGE}")
@@ -235,6 +263,9 @@ def build_video(story):
     with open("clips.txt", "w", encoding="utf-8") as file:
         for clip_name in clip_names:
             file.write(f"file '{clip_name}'\n")
+
+    print("Creating original cartoon sound effects...")
+    create_comedy_sfx(durations, total_duration)
 
     print("Creating a soft original comic background music bed...")
     music_source = (
