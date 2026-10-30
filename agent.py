@@ -168,23 +168,34 @@ def build_video(story):
     total_duration = float(probe)
     weights = [max(1, len(spoken_text(scene))) for scene in scenes]
     durations = [total_duration * weight / sum(weights) for weight in weights]
-    with open("scenes.txt", "w", encoding="utf-8") as file:
-        for image, duration in zip(images, durations):
-            file.write(f"file '{image}'\n")
-            file.write(f"duration {duration:.3f}\n")
-        file.write(f"file '{images[-1]}'\n")
-    print("Adding gentle camera motion and assembling MP4 with FFmpeg...")
-    motion_filter = (
-        "zoompan=z='min(zoom+0.00045,1.12)':"
-        "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-        "d=1:s=1280x720:fps=24,"
-        "fade=t=in:st=0:d=0.35,format=yuv420p"
-    )
+    clip_names = []
+    print("Rendering each scene for its full duration...")
+    for index, (image, duration) in enumerate(zip(images, durations), start=1):
+        clip_name = f"clip_{index:02d}.mp4"
+        motion_filter = (
+            "zoompan=z='min(zoom+0.00035,1.10)':"
+            "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            "d=1:s=1280x720:fps=24,"
+            "fade=t=in:st=0:d=0.30,format=yuv420p"
+        )
+        subprocess.run([
+            "ffmpeg", "-y", "-loop", "1", "-framerate", "24",
+            "-t", f"{duration:.3f}", "-i", image,
+            "-vf", motion_filter, "-t", f"{duration:.3f}",
+            "-an", "-c:v", "libx264", "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p", "-r", "24", clip_name
+        ], check=True)
+        clip_names.append(clip_name)
+
+    with open("clips.txt", "w", encoding="utf-8") as file:
+        for clip_name in clip_names:
+            file.write(f"file '{clip_name}'\\n")
+
+    print("Joining full-length scenes with Hindi narration...")
     subprocess.run([
-        "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "scenes.txt",
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "clips.txt",
         "-i", "narration.mp3", "-map", "0:v:0", "-map", "1:a:0",
-        "-vf", motion_filter, "-c:v", "libx264", "-preset", "ultrafast",
-        "-pix_fmt", "yuv420p", "-r", "24", "-c:a", "aac", "-b:a", "128k",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
         "-shortest", "-movflags", "+faststart", "golu_sonu_cartoon.mp4"
     ], check=True)
     print("SUCCESS: Video created: golu_sonu_cartoon.mp4")
