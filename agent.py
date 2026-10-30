@@ -19,7 +19,7 @@ def generate_video_script():
 
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        "models/gemini-2.5-flash:generateContent?key=" + API_KEY
+        "models/gemini-3.8-flash:generateContent?key=" + API_KEY
     )
 
     data = {
