@@ -189,7 +189,7 @@ def build_video(story):
 
     with open("clips.txt", "w", encoding="utf-8") as file:
         for clip_name in clip_names:
-            file.write(f"file '{clip_name}'\\n")
+            file.write(f"file '{clip_name}'\n")
 
     print("Joining full-length scenes with Hindi narration...")
     subprocess.run([
