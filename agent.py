@@ -173,13 +173,19 @@ def build_video(story):
             file.write(f"file '{image}'\n")
             file.write(f"duration {duration:.3f}\n")
         file.write(f"file '{images[-1]}'\n")
-    print("Assembling MP4 with FFmpeg...")
+    print("Adding gentle camera motion and assembling MP4 with FFmpeg...")
+    motion_filter = (
+        "zoompan=z='min(zoom+0.00045,1.12)':"
+        "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+        "d=1:s=1280x720:fps=24,"
+        "fade=t=in:st=0:d=0.35,format=yuv420p"
+    )
     subprocess.run([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "scenes.txt",
         "-i", "narration.mp3", "-map", "0:v:0", "-map", "1:a:0",
-        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-        "-r", "24", "-c:a", "aac", "-b:a", "128k", "-shortest",
-        "-movflags", "+faststart", "golu_sonu_cartoon.mp4"
+        "-vf", motion_filter, "-c:v", "libx264", "-preset", "ultrafast",
+        "-pix_fmt", "yuv420p", "-r", "24", "-c:a", "aac", "-b:a", "128k",
+        "-shortest", "-movflags", "+faststart", "golu_sonu_cartoon.mp4"
     ], check=True)
     print("SUCCESS: Video created: golu_sonu_cartoon.mp4")
 
