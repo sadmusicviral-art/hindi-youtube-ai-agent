@@ -289,6 +289,57 @@ def build_video(story):
     print("SUCCESS: Video created: golu_sonu_cartoon.mp4")
 
 
+def upload_to_youtube():
+    """Upload the rendered cartoon video to the authenticated YouTube channel."""
+    required = ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"]
+    missing = [name for name in required if not os.getenv(name)]
+    if missing:
+        raise ValueError("Missing GitHub Secrets: " + ", ".join(missing))
+
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+    from datetime import datetime, timezone
+
+    credentials = Credentials(
+        token=None,
+        refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=os.environ["YOUTUBE_CLIENT_ID"],
+        client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
+        scopes=["https://www.googleapis.com/auth/youtube.upload"],
+    )
+    credentials.refresh(Request())
+    youtube = build("youtube", "v3", credentials=credentials, cache_discovery=False)
+
+    title = "गोलू सोनू की मजेदार कहानी | हिंदी कार्टून कॉमेडी"
+    description = (
+        "देखिए गोलू और सोनू की एक नई मजेदार हिंदी कार्टून कहानी!\\n"
+        "ऐसी ही मजेदार कहानियों के लिए चैनल को Subscribe करें।\\n\\n"
+        "#GoluSonu #HindiCartoon #CartoonComedy #HindiStory"
+    )
+    body = {
+        "snippet": {
+            "title": title,
+            "description": description,
+            "tags": ["Golu Sonu", "Hindi Cartoon", "Cartoon Comedy", "Hindi Story"],
+            "categoryId": "23",
+        },
+        "status": {
+            "privacyStatus": "private",
+            "selfDeclaredMadeForKids": False,
+        },
+    }
+    media = MediaFileUpload("golu_sonu_cartoon.mp4", mimetype="video/mp4", resumable=True)
+    result = youtube.videos().insert(
+        part="snippet,status", body=body, media_body=media
+    ).execute()
+    print("SUCCESS: YouTube upload complete. Video ID: " + result.get("id", "unknown"))
+    print("Video privacy: private (review it in YouTube Studio before publishing).")
+
+
 if __name__ == "__main__":
     story = generate_video_script()
     build_video(story)
+    upload_to_youtube()
