@@ -5,6 +5,7 @@ import time
 import math
 import wave
 import struct
+import random
 import subprocess
 import urllib.request
 import urllib.error
@@ -22,12 +23,23 @@ REFERENCE_IMAGE = "Gemini_Generated_Image_7ahjea7ahjea7ahj.png"
 def generate_video_script():
     if not API_KEY:
         raise ValueError("GEMINI_API_KEY is not configured in GitHub Secrets")
-    prompt = """
-हिंदी में गोलू-सोनू की एक मौलिक, मजेदार कार्टून कहानी लिखो।
+    story_topics = [
+        "गाँव के मेले में खोया हुआ खजाना", "शरारती बंदर ने गाँव में मचाया हंगामा",
+        "गोलू-सोनू और रहस्यमयी हवेली", "किसान की अनोखी मशीन और मजेदार मुसीबत",
+        "जंगल की यात्रा और बोलने वाला तोता", "गाँव में आया नकली राजा",
+        "गोलू-सोनू की बस यात्रा में गड़बड़", "लड्डुओं की चोरी का रहस्य",
+        "बरसात में फँसे गाँव को बचाने की कहानी", "पुराने कुएँ का रहस्य",
+        "गोलू-सोनू और अनोखी पतंग प्रतियोगिता", "गाँव के स्कूल का मजेदार विज्ञान मेला",
+        "ऊँट, बंदर और गोलू-सोनू की अनोखी दोस्ती", "चालाक चोर को पकड़ने की योजना"
+    ]
+    chosen_topic = random.choice(story_topics)
+    print("Today's original story topic: " + chosen_topic)
+    prompt = f"""
+हिंदी में गोलू-सोनू की एक मौलिक, मजेदार कार्टून कहानी लिखो। आज का विषय: {chosen_topic}।
 किरदार हर सीन में एक जैसे रहें:
 गोलू: गोल-मटोल, भोला, खाने का शौकीन; पीली burger-print टी-शर्ट और नीली शॉर्ट्स।
 सोनू: दुबला-पतला, चश्मा, होशियार और शरारती; हरी polo टी-शर्ट और भूरी शॉर्ट्स।
-कहानी: जादुई समोसा। इसे 20 से 22 मिनट की सुनने योग्य लंबी कहानी बनाओ।
+ऊपर दिए गए आज के विषय पर 20 से 22 मिनट की सुनने योग्य लंबी कहानी बनाओ। हर दिन कहानी का विषय, समस्या, घटनाएँ, सहायक किरदार और अंत पिछले एपिसोड से अलग हों।
 कुल 18 से 22 सीन लिखो। हर सीन को "सीन 1", "सीन 2" ... से शुरू करो।
 कहानी में मजबूत शुरुआत, समस्या, कई मजेदार मोड़, भावनात्मक पल, क्लाइमैक्स और संतोषजनक अंत हो।
 हर सीन में स्पष्ट जगह/समय, क्या दिखाई देगा, Narrator की लाइनें और गोलू-सोनू तथा जरूरत के अनुसार सहायक किरदारों के अलग-अलग संवाद हों।
@@ -131,8 +143,32 @@ def wrap_text(draw, text, font, max_width):
 def make_scene_card(reference, scene, index, total):
     width, height = 1280, 720
     source = Image.open(reference).convert("RGB")
-    bg = source.resize((width, height), Image.Resampling.LANCZOS).filter(ImageFilter.GaussianBlur(18))
-    bg = Image.blend(bg, Image.new("RGB", (width, height), (20, 20, 28)), 0.48)
+    # Create a different illustrated setting for each scene using only free Pillow drawing.
+    palettes = [
+        ((105, 190, 245), (92, 174, 92)), ((255, 181, 105), (126, 160, 91)),
+        ((75, 125, 180), (62, 105, 80)), ((175, 135, 205), (110, 150, 95)),
+        ((245, 210, 125), (135, 175, 100)), ((110, 185, 175), (90, 135, 100))
+    ]
+    sky, ground = palettes[(index - 1) % len(palettes)]
+    bg = Image.new("RGB", (width, height), sky)
+    scenery = ImageDraw.Draw(bg)
+    scenery.rectangle((0, 430, width, height), fill=ground)
+    scenery.ellipse((980, 55, 1120, 195), fill=(255, 226, 120))
+    # Hills and village silhouettes change position and shape by scene number.
+    scenery.polygon([(0, 440), (180 + (index * 37) % 180, 250), (430, 440)], fill=(70, 135, 85))
+    scenery.polygon([(650, 440), (900, 230 + (index * 19) % 100), (1280, 440)], fill=(65, 125, 90))
+    if index % 3 == 1:
+        for bx in (90, 930):
+            scenery.rectangle((bx, 300, bx + 180, 455), fill=(210, 145, 90))
+            scenery.polygon([(bx - 20, 305), (bx + 90, 205), (bx + 200, 305)], fill=(145, 65, 55))
+    elif index % 3 == 2:
+        for tx in (120, 1050):
+            scenery.rectangle((tx - 12, 285, tx + 12, 470), fill=(95, 70, 45))
+            scenery.ellipse((tx - 95, 190, tx + 95, 360), fill=(45, 125, 65))
+    else:
+        scenery.rectangle((0, 385, width, 405), fill=(90, 145, 210))
+        for cx in (180, 520, 900):
+            scenery.ellipse((cx, 125, cx + 150, 185), fill=(245, 245, 240))
     foreground = source.copy()
     foreground.thumbnail((900, 650), Image.Resampling.LANCZOS)
     x = (width - foreground.width) // 2
