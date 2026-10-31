@@ -23,32 +23,22 @@ REFERENCE_IMAGE = "Gemini_Generated_Image_7ahjea7ahjea7ahj.png"
 def generate_video_script():
     if not API_KEY:
         raise ValueError("GEMINI_API_KEY is not configured in GitHub Secrets")
-    story_topics = [
-        "गाँव के मेले में खोया हुआ खजाना", "शरारती बंदर ने गाँव में मचाया हंगामा",
-        "गोलू-सोनू और रहस्यमयी हवेली", "किसान की अनोखी मशीन और मजेदार मुसीबत",
-        "जंगल की यात्रा और बोलने वाला तोता", "गाँव में आया नकली राजा",
-        "गोलू-सोनू की बस यात्रा में गड़बड़", "लड्डुओं की चोरी का रहस्य",
-        "बरसात में फँसे गाँव को बचाने की कहानी", "पुराने कुएँ का रहस्य",
-        "गोलू-सोनू और अनोखी पतंग प्रतियोगिता", "गाँव के स्कूल का मजेदार विज्ञान मेला",
-        "ऊँट, बंदर और गोलू-सोनू की अनोखी दोस्ती", "चालाक चोर को पकड़ने की योजना"
+    song_themes = [
+        "अधूरा प्यार और जुदाई", "धोखे के बाद खुद को संभालना", "पहली मोहब्बत की याद",
+        "माँ के त्याग और सपनों पर गीत", "दोस्ती और यारी", "मेहनत से सफलता",
+        "बारिश में पुरानी यादें", "दिल टूटने के बाद नई शुरुआत", "देसी स्वैग और आत्मविश्वास",
+        "सच्चे प्यार का इंतज़ार", "गाँव की मिट्टी और अपना बचपन"
     ]
-    chosen_topic = random.choice(story_topics)
-    print("Today's original story topic: " + chosen_topic)
+    chosen_topic = random.choice(song_themes)
+    print("Today's original song theme: " + chosen_topic)
     prompt = f"""
-हिंदी में गोलू-सोनू की एक मौलिक, मजेदार कार्टून कहानी लिखो। आज का विषय: {chosen_topic}।
-किरदार हर सीन में एक जैसे रहें:
-गोलू: गोल-मटोल, भोला, खाने का शौकीन; पीली burger-print टी-शर्ट और नीली शॉर्ट्स।
-सोनू: दुबला-पतला, चश्मा, होशियार और शरारती; हरी polo टी-शर्ट और भूरी शॉर्ट्स।
-ऊपर दिए गए आज के विषय पर 20 से 22 मिनट की सुनने योग्य लंबी कहानी बनाओ। हर दिन कहानी का विषय, समस्या, घटनाएँ, सहायक किरदार और अंत पिछले एपिसोड से अलग हों।
-कुल 18 से 22 सीन लिखो। हर सीन को "सीन 1", "सीन 2" ... से शुरू करो।
-कहानी में मजबूत शुरुआत, समस्या, कई मजेदार मोड़, भावनात्मक पल, क्लाइमैक्स और संतोषजनक अंत हो।
-हर सीन में स्पष्ट जगह/समय, क्या दिखाई देगा, Narrator की लाइनें और गोलू-सोनू तथा जरूरत के अनुसार सहायक किरदारों के अलग-अलग संवाद हों।
-हर डायलॉग अलग लाइन में इस फॉर्मेट में हो: "गोलू: ...", "सोनू: ...", "नैरेटर: ..."।
-किसान, गाँव वाले, दुकानदार, राजा या अन्य सहायक किरदार कहानी के अनुसार आ सकते हैं, पर गोलू-सोनू मुख्य रहें।
-हर सीन के अंत में "Image Prompt:" लिखकर उस सीन के लिए अलग English 3D cartoon visual prompt दो; कपड़े/चेहरे की continuity बनाए रखो और हर सीन का स्थान/एक्शन अलग हो।
-कुल बोली जाने वाली हिंदी लगभग 2200 से 2600 शब्द रखो ताकि narration 20-22 मिनट के आसपास बने। अनावश्यक दोहराव या खाली filler न हो।
-आसान, स्वाभाविक और बोलचाल वाली हिंदी रखो। कहानी पूरी तरह मौलिक हो।
+एक बिल्कुल मौलिक हिंदी गाने के पूरे बोल लिखो। आज का विषय: {chosen_topic}।
+गाना 3 से 4 मिनट के लिए हो। ढाँचा: [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Chorus], [Bridge], [Final Chorus], [Outro]।
+मुखड़ा याद रहने वाला और भावनात्मक हो। बोल सरल, स्वाभाविक, गाने योग्य और तुकबंदी वाले हों।
+किसी मौजूदा गाने, गायक या फिल्म की नकल मत करना। किसी प्रसिद्ध गायक की आवाज़ की नकल करने का निर्देश मत देना।
+सबसे पहली लाइन में "शीर्षक: ..." लिखो। उसके बाद सिर्फ गाने के बोल और सेक्शन लेबल दो।
 """
+
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.8, "maxOutputTokens": 10000}
@@ -72,7 +62,7 @@ def generate_video_script():
                 story = "\n".join(p["text"] for p in parts if "text" in p).strip()
                 if not story:
                     raise RuntimeError(f"{model} response did not contain text.")
-                Path("video_script.txt").write_text(story + "\n", encoding="utf-8")
+                Path("song_lyrics.txt").write_text(story + "\n", encoding="utf-8")
                 print(f"SUCCESS: Story generated with {model}")
                 return story
             except urllib.error.HTTPError as error:
@@ -324,9 +314,9 @@ def build_video(story):
         "-filter_complex", "[2:a]volume=0.12[music];[3:a]volume=0.35[sfx];[1:a][music][sfx]amix=inputs=3:duration=first:dropout_transition=2,alimiter=limit=0.95[audio]",
         "-map", "0:v:0", "-map", "[audio]",
         "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
-        "-shortest", "-movflags", "+faststart", "golu_sonu_cartoon.mp4"
+        "-shortest", "-movflags", "+faststart", "original_hindi_song.mp4"
     ], check=True)
-    print("SUCCESS: Video created: golu_sonu_cartoon.mp4")
+    print("SUCCESS: Video created: original_hindi_song.mp4")
 
 
 def upload_to_youtube():
@@ -353,17 +343,17 @@ def upload_to_youtube():
     credentials.refresh(Request())
     youtube = build("youtube", "v3", credentials=credentials, cache_discovery=False)
 
-    title = "गोलू सोनू की मजेदार कहानी | हिंदी कार्टून कॉमेडी"
+    title = "नया ओरिजिनल हिंदी गाना | Hindi Original Song"
     description = (
-        "देखिए गोलू और सोनू की एक नई मजेदार हिंदी कार्टून कहानी!\\n"
+        "सुनिए हमारा नया ओरिजिनल हिंदी गाना।\\n"
         "ऐसी ही मजेदार कहानियों के लिए चैनल को Subscribe करें।\\n\\n"
-        "#GoluSonu #HindiCartoon #CartoonComedy #HindiStory"
+        "#HindiSong #OriginalSong #HindiMusic #NewSong"
     )
     body = {
         "snippet": {
             "title": title,
             "description": description,
-            "tags": ["Golu Sonu", "Hindi Cartoon", "Cartoon Comedy", "Hindi Story"],
+            "tags": ["Hindi Song", "Original Song", "Hindi Music", "New Hindi Song"],
             "categoryId": "23",
         },
         "status": {
@@ -371,7 +361,7 @@ def upload_to_youtube():
             "selfDeclaredMadeForKids": False,
         },
     }
-    media = MediaFileUpload("golu_sonu_cartoon.mp4", mimetype="video/mp4", resumable=True)
+    media = MediaFileUpload("original_hindi_song.mp4", mimetype="video/mp4", resumable=True)
     result = youtube.videos().insert(
         part="snippet,status", body=body, media_body=media
     ).execute()
