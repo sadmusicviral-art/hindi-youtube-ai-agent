@@ -1,375 +1,154 @@
-import os
-import json
-import re
-import time
-import math
-import wave
-import struct
-import random
-import subprocess
-import urllib.request
-import urllib.error
+import os, json, re, time, math, wave, struct, random, subprocess, urllib.request, urllib.error
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 from gtts import gTTS
 
 API_KEY = os.getenv("GEMINI_API_KEY")
-MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
-MAX_ATTEMPTS_PER_MODEL = 2
-TIMEOUT_SECONDS = 120
-REFERENCE_IMAGE = "Gemini_Generated_Image_7ahjea7ahjea7ahj.png"
+OUTPUT = "original_hindi_song.mp4"
+THEMES = ["अधूरा प्यार और जुदाई", "पहली मोहब्बत की याद", "धोखे के बाद नई शुरुआत", "माँ का प्यार", "दोस्ती और यारी", "मेहनत और सपने", "बारिश में पुरानी यादें", "देसी स्वैग और आत्मविश्वास", "गाँव की मिट्टी और बचपन"]
 
-
-def generate_video_script():
+def generate_song():
     if not API_KEY:
-        raise ValueError("GEMINI_API_KEY is not configured in GitHub Secrets")
-    song_themes = [
-        "अधूरा प्यार और जुदाई", "धोखे के बाद खुद को संभालना", "पहली मोहब्बत की याद",
-        "माँ के त्याग और सपनों पर गीत", "दोस्ती और यारी", "मेहनत से सफलता",
-        "बारिश में पुरानी यादें", "दिल टूटने के बाद नई शुरुआत", "देसी स्वैग और आत्मविश्वास",
-        "सच्चे प्यार का इंतज़ार", "गाँव की मिट्टी और अपना बचपन"
-    ]
-    chosen_topic = random.choice(song_themes)
-    print("Today's original song theme: " + chosen_topic)
-    prompt = f"""
-एक बिल्कुल मौलिक हिंदी गाने के पूरे बोल लिखो। आज का विषय: {chosen_topic}।
-गाना 3 से 4 मिनट के लिए हो। ढाँचा: [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Chorus], [Bridge], [Final Chorus], [Outro]।
-मुखड़ा याद रहने वाला और भावनात्मक हो। बोल सरल, स्वाभाविक, गाने योग्य और तुकबंदी वाले हों।
-किसी मौजूदा गाने, गायक या फिल्म की नकल मत करना। किसी प्रसिद्ध गायक की आवाज़ की नकल करने का निर्देश मत देना।
-सबसे पहली लाइन में "शीर्षक: ..." लिखो। उसके बाद सिर्फ गाने के बोल और सेक्शन लेबल दो।
-"""
+        raise RuntimeError("GEMINI_API_KEY GitHub Secret missing")
+    theme = random.choice(THEMES)
+    prompt = f"""आज का विषय: {theme}
+एक नया, पूरी तरह मौलिक हिंदी गीत लिखो। किसी मौजूदा गाने/गायक की नकल नहीं।
+सरल बोल, स्वाभाविक तुक, याद रहने वाला मुखड़ा। संरचना [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Chorus], [Bridge], [Final Chorus], [Outro]।
+पहली पंक्ति 'शीर्षक: ...' हो। हर पंक्ति छोटी और साफ हो। केवल शीर्षक और गीत के बोल दो।"""
+    payload = {"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.85,"maxOutputTokens":5000}}
+    errors=[]
+    for model in ["gemini-2.5-flash", "gemini-2.0-flash"]:
+        url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
+        req=urllib.request.Request(url,data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json"},method="POST")
+        try:
+            with urllib.request.urlopen(req,timeout=120) as res: data=json.loads(res.read().decode())
+            parts=data.get("candidates",[{}])[0].get("content",{}).get("parts",[])
+            text="\n".join(p.get("text","") for p in parts).strip()
+            if len(text)<250: raise RuntimeError("Gemini returned too little lyric text")
+            Path("song_lyrics.txt").write_text(text+"\n",encoding="utf-8")
+            print("Generated original lyrics on theme:",theme)
+            return text,theme
+        except Exception as e:
+            errors.append(f"{model}: {e}")
+            print(errors[-1])
+    raise RuntimeError("Song writing failed: "+" | ".join(errors))
 
-    data = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.8, "maxOutputTokens": 10000}
-    }
-    last_error = None
-    for model in MODELS:
-        url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + API_KEY
-        request = urllib.request.Request(
-            url, data=json.dumps(data, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json"}, method="POST"
-        )
-        for attempt in range(1, MAX_ATTEMPTS_PER_MODEL + 1):
-            try:
-                print(f"Trying {model}, attempt {attempt}/{MAX_ATTEMPTS_PER_MODEL}...")
-                with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-                    result = json.loads(response.read().decode("utf-8"))
-                candidates = result.get("candidates", [])
-                if not candidates:
-                    raise RuntimeError(f"{model} returned no candidates: {str(result)[:1000]}")
-                parts = candidates[0].get("content", {}).get("parts", [])
-                story = "\n".join(p["text"] for p in parts if "text" in p).strip()
-                if not story:
-                    raise RuntimeError(f"{model} response did not contain text.")
-                Path("song_lyrics.txt").write_text(story + "\n", encoding="utf-8")
-                print(f"SUCCESS: Story generated with {model}")
-                return story
-            except urllib.error.HTTPError as error:
-                details = error.read().decode("utf-8", errors="replace")
-                last_error = RuntimeError(f"{model} HTTP {error.code}: {details[:800]}")
-                print(f"{model} API error: HTTP {error.code}")
-                if error.code in (429, 500, 502, 503, 504):
-                    break
-                raise RuntimeError(f"Gemini API HTTP {error.code}: {details[:1200]}") from error
-            except (TimeoutError, urllib.error.URLError) as error:
-                last_error = error
-                print(f"{model} network/timeout error: {error}")
-                break
-            if attempt < MAX_ATTEMPTS_PER_MODEL:
-                time.sleep(8 * attempt)
-    raise RuntimeError("All free Gemini models failed. Last error: " + str(last_error))
-
-
-def get_font(size):
-    candidates = [
-        "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansDevanagariUI-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ]
-    for path in candidates:
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size)
+def font(size):
+    for p in ["/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf","/usr/share/fonts/truetype/noto/NotoSansDevanagariUI-Regular.ttf","/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]:
+        if os.path.exists(p): return ImageFont.truetype(p,size)
     return ImageFont.load_default()
 
+def lyric_sections(text):
+    title="आज का नया हिंदी गाना"
+    m=re.search(r"शीर्षक\s*[:：-]\s*(.+)",text)
+    if m: title=m.group(1).strip()
+    sections=[]
+    current="गीत"
+    lines=[]
+    for raw in text.splitlines():
+        s=raw.strip()
+        if not s: continue
+        if re.match(r"शीर्षक\s*[:：-]",s): continue
+        if s.startswith("[") and s.endswith("]"):
+            if lines: sections.append((current,lines)); lines=[]
+            current=s.strip("[] ")
+        elif not s.startswith("#"):
+            s=re.sub(r"[*_\x60]","",s).strip()
+            if s: lines.append(s)
+    if lines: sections.append((current,lines))
+    if not sections: raise RuntimeError("Lyrics had no usable sections")
+    return title,sections
 
-def split_scenes(story):
-    chunks = re.split(r"(?=सीन\s*[0-9०-९]+)", story, flags=re.IGNORECASE)
-    scenes = [chunk.strip() for chunk in chunks if chunk.strip()]
-    return scenes[:24] if scenes else [story.strip()]
+def render_card(title,section,lines,index):
+    W,H=1280,720
+    im=Image.new("RGB",(W,H),(18+(index*13)%35,22+(index*9)%28,55+(index*17)%55))
+    d=ImageDraw.Draw(im,"RGBA")
+    for r in range(5):
+        d.ellipse((80+r*30,80+r*22,1200-r*30,640-r*22),outline=(255,210,150,35),width=3)
+    d.rounded_rectangle((65,55,1215,665),radius=35,fill=(5,8,24,155),outline=(255,255,255,100),width=2)
+    d.text((100,85),title[:48],font=font(42),fill=(255,220,150))
+    d.text((100,165),section.upper(),font=font(30),fill=(120,220,255))
+    y=245
+    for line in lines[:7]:
+        # Keep each line readable; wrap by character count.
+        chunks=[line[i:i+34] for i in range(0,len(line),34)]
+        for chunk in chunks:
+            d.text((105,y),chunk,font=font(34),fill="white",stroke_width=1,stroke_fill=(0,0,0))
+            y+=52
+    path=f"lyric_{index:02d}.jpg"
+    im.save(path,quality=92)
+    return path
 
+def make_instrumental(duration):
+    # Original, simple synthesized chord-and-pulse backing; not a commercial-quality recorded band.
+    sr=44100
+    chords=[(261.63,329.63,392.00),(220.00,261.63,329.63),(174.61,220.00,261.63),(196.00,246.94,293.66)]
+    total=int(duration*sr)
+    with wave.open("instrumental.wav","wb") as wf:
+        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(sr)
+        buf=bytearray()
+        for n in range(total):
+            t=n/sr
+            chord=chords[int(t/4)%len(chords)]
+            fade=min(1.0,t/2,(duration-t)/2 if duration-t>0 else 0.0)
+            v=sum(math.sin(2*math.pi*f*t) for f in chord)*0.035
+            # soft rhythmic pulse
+            beat=0.025*math.sin(2*math.pi*90*t)*math.exp(-((t%0.5)/0.12)*3)
+            sample=max(-1,min(1,(v+beat)*max(0,fade)))
+            buf.extend(struct.pack("<h",int(sample*32767)))
+            if len(buf)>=65536:
+                wf.writeframes(buf); buf.clear()
+        if buf: wf.writeframes(buf)
 
-def spoken_text(story):
-    lines = []
-    for line in story.splitlines():
-        value = line.strip()
-        if not value:
-            continue
-        if re.match(r"^(image\s*prompt|इमेज\s*प्रॉम्प्ट)\s*:", value, re.IGNORECASE):
-            continue
-        if re.search(r"\b(3d cartoon|cinematic|high quality|character design|render)\b", value, re.IGNORECASE):
-            continue
-        value = re.sub(r"[*#_\x60]", "", value)
-        lines.append(value)
-    return "\n".join(lines)
-
-
-def wrap_text(draw, text, font, max_width):
-    words = text.split()
-    rows, current = [], ""
-    for word in words:
-        test = (current + " " + word).strip()
-        if draw.textbbox((0, 0), test, font=font)[2] <= max_width:
-            current = test
-        else:
-            if current:
-                rows.append(current)
-            current = word
-    if current:
-        rows.append(current)
-    return rows
-
-
-def make_scene_card(reference, scene, index, total):
-    width, height = 1280, 720
-    source = Image.open(reference).convert("RGB")
-    # Create a different illustrated setting for each scene using only free Pillow drawing.
-    palettes = [
-        ((105, 190, 245), (92, 174, 92)), ((255, 181, 105), (126, 160, 91)),
-        ((75, 125, 180), (62, 105, 80)), ((175, 135, 205), (110, 150, 95)),
-        ((245, 210, 125), (135, 175, 100)), ((110, 185, 175), (90, 135, 100))
-    ]
-    sky, ground = palettes[(index - 1) % len(palettes)]
-    bg = Image.new("RGB", (width, height), sky)
-    scenery = ImageDraw.Draw(bg)
-    scenery.rectangle((0, 430, width, height), fill=ground)
-    scenery.ellipse((980, 55, 1120, 195), fill=(255, 226, 120))
-    # Hills and village silhouettes change position and shape by scene number.
-    scenery.polygon([(0, 440), (180 + (index * 37) % 180, 250), (430, 440)], fill=(70, 135, 85))
-    scenery.polygon([(650, 440), (900, 230 + (index * 19) % 100), (1280, 440)], fill=(65, 125, 90))
-    if index % 3 == 1:
-        for bx in (90, 930):
-            scenery.rectangle((bx, 300, bx + 180, 455), fill=(210, 145, 90))
-            scenery.polygon([(bx - 20, 305), (bx + 90, 205), (bx + 200, 305)], fill=(145, 65, 55))
-    elif index % 3 == 2:
-        for tx in (120, 1050):
-            scenery.rectangle((tx - 12, 285, tx + 12, 470), fill=(95, 70, 45))
-            scenery.ellipse((tx - 95, 190, tx + 95, 360), fill=(45, 125, 65))
-    else:
-        scenery.rectangle((0, 385, width, 405), fill=(90, 145, 210))
-        for cx in (180, 520, 900):
-            scenery.ellipse((cx, 125, cx + 150, 185), fill=(245, 245, 240))
-    foreground = source.copy()
-    foreground.thumbnail((900, 650), Image.Resampling.LANCZOS)
-    x = (width - foreground.width) // 2
-    y = 20 + (650 - foreground.height) // 2
-    bg.paste(foreground, (x, y))
-    draw = ImageDraw.Draw(bg, "RGBA")
-    draw.rounded_rectangle((35, 35, 1245, 685), radius=28, fill=(0, 0, 0, 105), outline=(255, 255, 255, 150), width=3)
-    title_font = get_font(48)
-    small_font = get_font(30)
-    draw.text((75, 65), f"GOLU & SONU  |  SCENE {index}/{total}", font=title_font, fill="white", stroke_width=2, stroke_fill="black")
-    clean = re.sub(r"(?i)image\s*prompt\s*:[\s\S]*", "", scene)
-    clean = re.sub(r"इमेज\s*प्रॉम्प्ट\s*:[\s\S]*", "", clean).strip()
-    clean = re.sub(r"[*#_\x60]", "", clean)
-    rows = wrap_text(draw, clean, small_font, 1080)[:5]
-    panel_top = 480
-    draw.rounded_rectangle((60, panel_top, 1220, 650), radius=18, fill=(0, 0, 0, 190))
-    yy = panel_top + 18
-    for row in rows:
-        draw.text((88, yy), row, font=small_font, fill="white", stroke_width=1, stroke_fill="black")
-        yy += 34
-    output = f"scene_{index:02d}.jpg"
-    bg.convert("RGB").save(output, quality=88)
-    return output
-
-
-def create_character_narration(story):
-    """Create separate character-style voices using free Hindi TTS plus pitch shaping."""
-    audio_files = []
-    lines = [line.strip() for line in story.splitlines() if line.strip()]
-    print("Creating separate Hindi voices for Golu and Sonu...")
-    for line_number, line in enumerate(lines, start=1):
-        clean = re.sub(r"[*#_`]", "", line).strip()
-        if re.match(r"^सीन\s*[0-9०-९]+\s*$", clean, re.IGNORECASE):
-            continue
-        if re.match(r"^(image\s*prompt|इमेज\s*प्रॉम्प्ट)\s*:", clean, re.IGNORECASE):
-            continue
-        speaker = "narrator"
-        text = clean
-        match = re.match(r"^(गोलू|सोनू|नैरेटर|Narrator)\s*[:：-]\s*(.+)$", clean, re.IGNORECASE)
-        if match:
-            name = match.group(1).lower()
-            text = match.group(2).strip()
-            if name == "गोलू":
-                speaker = "golu"
-            elif name == "सोनू":
-                speaker = "sonu"
-        if not text:
-            continue
-        raw_file = f"voice_raw_{line_number:03d}.mp3"
-        out_file = f"voice_{line_number:03d}.mp3"
-        gTTS(text=text, lang="hi", slow=False).save(raw_file)
-        pitch = {"golu": 0.90, "sonu": 1.12, "narrator": 1.0}[speaker]
-        if pitch == 1.0:
-            audio_filter = "atempo=0.90"
-        else:
-            audio_filter = f"asetrate=44100*{pitch},aresample=44100,atempo={1.0/pitch:.6f},atempo=0.90"
-        subprocess.run(["ffmpeg", "-y", "-i", raw_file, "-af", audio_filter,
-                        "-c:a", "libmp3lame", "-q:a", "4", out_file],
-                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        audio_files.append(out_file)
-    if not audio_files:
-        raise RuntimeError("No spoken dialogue found for narration.")
-    with open("audio_clips.txt", "w", encoding="utf-8", newline="\n") as file:
-        for audio_file in audio_files:
-            file.write(f"file '{audio_file}'\n")
-    subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "audio_clips.txt",
-                    "-c:a", "libmp3lame", "-q:a", "4", "narration.mp3"],
-                   check=True)
-    print(f"SUCCESS: Created {len(audio_files)} voice segments.")
-
-
-def create_comedy_sfx(durations, total_duration):
-    """Create an original cartoon boing track without external audio files."""
-    sample_rate = 44100
-    total_samples = int(total_duration * sample_rate)
-    samples = [0.0] * total_samples
-    elapsed = 0.0
-    for duration in durations:
-        start = int((elapsed + duration * 0.62) * sample_rate)
-        length = 0.32
-        count = min(int(length * sample_rate), total_samples - start)
-        for n in range(max(0, count)):
-            t = n / sample_rate
-            frequency = 620 - 390 * (t / length)
-            envelope = math.exp(-7.0 * t / length) * min(1.0, t * 45)
-            samples[start + n] += 0.20 * envelope * math.sin(2 * math.pi * frequency * t)
-        elapsed += duration
-    with wave.open("comedy_sfx.wav", "wb") as audio:
-        audio.setnchannels(1)
-        audio.setsampwidth(2)
-        audio.setframerate(sample_rate)
-        frames = bytearray()
-        for value in samples:
-            value = max(-0.95, min(0.95, value))
-            frames.extend(struct.pack("<h", int(value * 32767)))
-        audio.writeframes(frames)
-def build_video(story):
-    if not os.path.exists(REFERENCE_IMAGE):
-        raise FileNotFoundError(f"Character reference image not found: {REFERENCE_IMAGE}")
-    speech = spoken_text(story)
-    if len(speech) < 40:
-        raise RuntimeError("Story text is too short to create narration.")
-    create_character_narration(story)
-    scenes = split_scenes(story)
-    images = [make_scene_card(REFERENCE_IMAGE, scene, i + 1, len(scenes)) for i, scene in enumerate(scenes)]
-    probe = subprocess.check_output([
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1", "narration.mp3"
-    ], text=True).strip()
-    total_duration = float(probe)
-    weights = [max(1, len(spoken_text(scene))) for scene in scenes]
-    durations = [total_duration * weight / sum(weights) for weight in weights]
-    clip_names = []
-    print("Rendering each scene for its full duration...")
-    for index, (image, duration) in enumerate(zip(images, durations), start=1):
-        clip_name = f"clip_{index:02d}.mp4"
-        motion_filter = (
-            "zoompan=z='min(zoom+0.00035,1.10)':"
-            "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-            "d=1:s=1280x720:fps=24,"
-            "fade=t=in:st=0:d=0.30,format=yuv420p"
-        )
-        subprocess.run([
-            "ffmpeg", "-y", "-loop", "1", "-framerate", "24",
-            "-t", f"{duration:.3f}", "-i", image,
-            "-vf", motion_filter, "-t", f"{duration:.3f}",
-            "-an", "-c:v", "libx264", "-preset", "ultrafast",
-            "-pix_fmt", "yuv420p", "-r", "24", clip_name
-        ], check=True)
-        clip_names.append(clip_name)
-
-    with open("clips.txt", "w", encoding="utf-8") as file:
-        for clip_name in clip_names:
-            file.write(f"file '{clip_name}'\n")
-
-    print("Creating original cartoon sound effects...")
-    create_comedy_sfx(durations, total_duration)
-
-    print("Creating a soft original comic background music bed...")
-    music_source = (
-        "aevalsrc=0.10*sin(2*PI*261.63*t)+0.07*sin(2*PI*329.63*t)+"
-        "0.06*sin(2*PI*392.00*t):s=44100:d=" + f"{total_duration:.3f}"
-    )
-    subprocess.run([
-        "ffmpeg", "-y", "-f", "lavfi", "-i", music_source, "-c:a", "pcm_s16le",
-        "background_music.wav"
-    ], check=True)
-
-    print("Mixing character voices with quiet background music...")
-    subprocess.run([
-        "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "clips.txt",
-        "-i", "narration.mp3", "-i", "background_music.wav", "-i", "comedy_sfx.wav",
-        "-filter_complex", "[2:a]volume=0.12[music];[3:a]volume=0.35[sfx];[1:a][music][sfx]amix=inputs=3:duration=first:dropout_transition=2,alimiter=limit=0.95[audio]",
-        "-map", "0:v:0", "-map", "[audio]",
-        "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
-        "-shortest", "-movflags", "+faststart", "original_hindi_song.mp4"
-    ], check=True)
-    print("SUCCESS: Video created: original_hindi_song.mp4")
-
+def build_video(song):
+    title,sections=lyric_sections(song)
+    clean=[]
+    for name,lines in sections:
+        clean.extend(lines)
+    narration="। ".join(clean)
+    if len(narration)<100: raise RuntimeError("Lyrics too short for narration")
+    print("Creating Hindi spoken vocal using gTTS (this is speech, NOT singing).")
+    gTTS(text=narration,lang="hi",slow=False).save("narration.mp3")
+    probe=subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1","narration.mp3"],text=True)
+    duration=float(probe)
+    weights=[max(1,sum(len(x) for x in lines)) for _,lines in sections]
+    total=sum(weights)
+    clips=[]
+    for i,((name,lines),weight) in enumerate(zip(sections,weights),1):
+        img=render_card(title,name,lines,i)
+        seconds=max(2.5,duration*weight/total)
+        clip=f"part_{i:02d}.mp4"
+        vf="scale=1280:720,zoompan=z='min(zoom+0.00025,1.06)':d=1:s=1280x720:fps=24,format=yuv420p"
+        subprocess.run(["ffmpeg","-y","-loop","1","-i",img,"-t",str(seconds),"-vf",vf,"-an","-c:v","libx264","-preset","ultrafast","-pix_fmt","yuv420p",clip],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+        clips.append(clip)
+    with open("parts.txt","w") as f:
+        for c in clips: f.write(f"file '{c}'\n")
+    make_instrumental(duration+2)
+    subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i","parts.txt","-i","narration.mp3","-i","instrumental.wav","-filter_complex","[2:a]volume=0.20[m];[1:a]volume=1.0[v];[v][m]amix=inputs=2:duration=first:dropout_transition=2,alimiter=limit=0.95[a]","-map","0:v","-map","[a]","-c:v","copy","-c:a","aac","-b:a","160k","-shortest","-movflags","+faststart",OUTPUT],check=True)
+    Path("song_title.txt").write_text(title,encoding="utf-8")
+    print("Rendered lyric video:",OUTPUT,"duration:",round(duration,1),"seconds")
 
 def upload_to_youtube():
-    """Upload the rendered cartoon video to the authenticated YouTube channel."""
-    required = ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"]
-    missing = [name for name in required if not os.getenv(name)]
-    if missing:
-        raise ValueError("Missing GitHub Secrets: " + ", ".join(missing))
-
+    required=["YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]
+    missing=[x for x in required if not os.getenv(x)]
+    if missing: raise RuntimeError("Missing YouTube secrets: "+", ".join(missing))
     from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
-    from datetime import datetime, timezone
+    creds=Credentials(None,refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],token_uri="https://oauth2.googleapis.com/token",client_id=os.environ["YOUTUBE_CLIENT_ID"],client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],scopes=["https://www.googleapis.com/auth/youtube.upload"])
+    creds.refresh(Request())
+    yt=build("youtube","v3",credentials=creds,cache_discovery=False)
+    title=Path("song_title.txt").read_text(encoding="utf-8").strip()
+    yt_title=(title+" | Original Hindi Lyrics Video")[:100]
+    desc=f"{title}\n\nएक नया मौलिक हिंदी गीत। इस वीडियो में हिंदी टेक्स्ट-टू-स्पीच आवाज़ और कंप्यूटर से बनाया गया साधारण बैकग्राउंड संगीत है; यह पेशेवर गायकी की रिकॉर्डिंग नहीं है।\n\n#HindiSong #OriginalSong #HindiMusic #LyricsVideo"
+    body={"snippet":{"title":yt_title,"description":desc,"tags":["Hindi Song","Original Hindi Song","Hindi Lyrics","Original Song","Lyrics Video"],"categoryId":"10"},"status":{"privacyStatus":"private","selfDeclaredMadeForKids":False}}
+    media=MediaFileUpload(OUTPUT,mimetype="video/mp4",resumable=True)
+    result=yt.videos().insert(part="snippet,status",body=body,media_body=media).execute()
+    print("UPLOAD SUCCESS. Video ID:",result.get("id"))
+    print("Uploaded PRIVATE for review.")
 
-    credentials = Credentials(
-        token=None,
-        refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=os.environ["YOUTUBE_CLIENT_ID"],
-        client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
-        scopes=["https://www.googleapis.com/auth/youtube.upload"],
-    )
-    credentials.refresh(Request())
-    youtube = build("youtube", "v3", credentials=credentials, cache_discovery=False)
-
-    title = "नया ओरिजिनल हिंदी गाना | Hindi Original Song"
-    description = (
-        "सुनिए हमारा नया ओरिजिनल हिंदी गाना।\\n"
-        "ऐसी ही मजेदार कहानियों के लिए चैनल को Subscribe करें।\\n\\n"
-        "#HindiSong #OriginalSong #HindiMusic #NewSong"
-    )
-    body = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "tags": ["Hindi Song", "Original Song", "Hindi Music", "New Hindi Song"],
-            "categoryId": "23",
-        },
-        "status": {
-            "privacyStatus": "private",
-            "selfDeclaredMadeForKids": False,
-        },
-    }
-    media = MediaFileUpload("original_hindi_song.mp4", mimetype="video/mp4", resumable=True)
-    result = youtube.videos().insert(
-        part="snippet,status", body=body, media_body=media
-    ).execute()
-    print("SUCCESS: YouTube upload complete. Video ID: " + result.get("id", "unknown"))
-    print("Video privacy: private (review it in YouTube Studio before publishing).")
-
-
-if __name__ == "__main__":
-    story = generate_video_script()
-    build_video(story)
+if __name__=="__main__":
+    song,theme=generate_song()
+    build_video(song)
     upload_to_youtube()
