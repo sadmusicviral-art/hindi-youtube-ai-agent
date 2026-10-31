@@ -1,4 +1,4 @@
-name: Hindi YouTube AI Agent
+name: Hindi Original Song Agent
 
 on:
   workflow_dispatch:
@@ -6,8 +6,9 @@ on:
     - cron: "30 3 * * *"
 
 jobs:
-  start-agent:
+  generate-song:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -27,20 +28,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install Pillow gTTS google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
 
-      - name: Generate Original Hindi Song Lyrics, Voice and MP4 Video
+      - name: Generate and Upload Original Hindi Lyric Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: |
-          python agent.py
+        run: python agent.py
 
       - name: Save Generated Files
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: golu-sonu-cartoon-video
+          name: original-hindi-song-output
+          if-no-files-found: warn
           path: |
             song_lyrics.txt
+            song_title.txt
             narration.mp3
             original_hindi_song.mp4
