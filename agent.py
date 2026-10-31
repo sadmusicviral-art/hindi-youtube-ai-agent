@@ -284,8 +284,8 @@ def build_video(story):
     print("Mixing character voices with quiet background music...")
     subprocess.run([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "clips.txt",
-        "-i", "narration.mp3", "-i", "background_music.wav",
-        "-filter_complex", "[2:a]volume=0.12[music];[1:a][music]amix=inputs=2:duration=first:dropout_transition=2,alimiter=limit=0.95[audio]",
+        "-i", "narration.mp3", "-i", "background_music.wav", "-i", "comedy_sfx.wav",
+        "-filter_complex", "[2:a]volume=0.12[music];[3:a]volume=0.35[sfx];[1:a][music][sfx]amix=inputs=3:duration=first:dropout_transition=2,alimiter=limit=0.95[audio]",
         "-map", "0:v:0", "-map", "[audio]",
         "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
         "-shortest", "-movflags", "+faststart", "golu_sonu_cartoon.mp4"
