@@ -27,7 +27,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install Pillow gTTS google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
 
-      - name: Generate Story, Hindi Voice and MP4 Video
+      - name: Generate Original Hindi Song Lyrics, Voice and MP4 Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
@@ -41,6 +41,6 @@ jobs:
         with:
           name: golu-sonu-cartoon-video
           path: |
-            video_script.txt
+            song_lyrics.txt
             narration.mp3
-            golu_sonu_cartoon.mp4
+            original_hindi_song.mp4
