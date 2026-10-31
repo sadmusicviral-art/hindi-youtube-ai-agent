@@ -17,7 +17,7 @@ def generate_song():
 पहली पंक्ति 'शीर्षक: ...' हो। हर पंक्ति छोटी और साफ हो। केवल शीर्षक और गीत के बोल दो।"""
     payload = {"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.85,"maxOutputTokens":5000}}
     errors=[]
-    for model in ["gemini-2.5-flash", "gemini-2.0-flash"]:
+    for model in ["gemini-3.8-flash", "gemini-3.5-flash-lite"]:
         url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
         req=urllib.request.Request(url,data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json"},method="POST")
         try:
@@ -28,8 +28,12 @@ def generate_song():
             Path("song_lyrics.txt").write_text(text+"\n",encoding="utf-8")
             print("Generated original lyrics on theme:",theme)
             return text,theme
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")
+            errors.append(f"{model}: HTTP {e.code}: {detail[:600]}")
+            print(errors[-1])
         except Exception as e:
-            errors.append(f"{model}: {e}")
+            errors.append(f"{model}: {type(e).__name__}: {e}")
             print(errors[-1])
     raise RuntimeError("Song writing failed: "+" | ".join(errors))
 
